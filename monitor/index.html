@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STC Cricket · Realtime Monitor V28.6</title>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
+    rel="stylesheet" />
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="mointor.css">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
+</head>
+
+<body>
+  <div class="critical-overlay" id="criticalOverlay"></div>
+
+  <div class="critical-banner" id="criticalBanner">
+    <div class="critical-banner-card">
+      <div class="critical-banner-top">
+        <div class="critical-badge">CRITICAL ALERT</div>
+        <div class="critical-live-dot"></div>
+      </div>
+
+      <div class="critical-title" id="criticalTitle">Connection Lost</div>
+      <div class="critical-sub" id="criticalSub">One or more critical services are disconnected</div>
+
+      <div class="critical-reason-list" id="criticalReasonList"></div>
+    </div>
+  </div>
+
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="logo-shell">
+        <div class="logo-box">
+          <div class="logo-pulse"></div>
+          <div class="logo-status" id="logoStatusDot"></div>
+          <div class="monitor-icon">
+            <div class="monitor-screen"></div>
+            <div class="monitor-stand"></div>
+          </div>
+          <div class="logo-waves">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+      <div class="brand">
+        <h1>Realtime Monitor Dashboard V28.6</h1>
+        <p>Admin · Scorebar · Updater · Team Editor · Supabase Realtime</p>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="match-box">
+        <label>Match</label>
+        <input type="text" id="matchIdInput" value="my_match_999">
+        <button class="btn btn-primary" onclick="applyMatchId()">Connect</button>
+      </div>
+
+      <div class="live-chip" id="globalChip">
+        <div class="live-dot"></div>
+        <span>Monitoring</span>
+      </div>
+
+      <div class="time-box">
+        <div class="clock" id="clock">00:00:00</div>
+        <div class="date" id="dateEl">--</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ping-monitor-container">
+    <div class="ping-monitor-card" id="pingCardAdmin">
+      <div class="pm-head">
+        <span class="pm-title">🎮 Admin Panel</span>
+        <span class="pm-val" id="pmValAdmin">-- ms</span>
+      </div>
+      <div class="pm-bar">
+        <div class="pm-fill" id="pmFillAdmin"></div>
+      </div>
+    </div>
+
+    <div class="ping-monitor-card" id="pingCardScorebar">
+      <div class="pm-head">
+        <span class="pm-title">📺 Scorebar</span>
+        <span class="pm-val" id="pmValScorebar">-- ms</span>
+      </div>
+      <div class="pm-bar">
+        <div class="pm-fill" id="pmFillScorebar"></div>
+      </div>
+    </div>
+
+    <div class="ping-monitor-card" id="pingCardUpdater">
+      <div class="pm-head">
+        <span class="pm-title">⚡ Score Updater</span>
+        <span class="pm-val" id="pmValUpdater">-- ms</span>
+      </div>
+      <div class="pm-bar">
+        <div class="pm-fill" id="pmFillUpdater"></div>
+      </div>
+    </div>
+
+    <div class="ping-monitor-card" id="pingCardSupabase">
+      <div class="pm-head">
+        <span class="pm-title">📡 Supabase RT</span>
+        <span class="pm-val" id="pmValSupabase">-- ms</span>
+      </div>
+      <div class="pm-bar">
+        <div class="pm-fill" id="pmFillSupabase"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-body">
+    <div class="updater-device-wrap">
+      <div class="updater-device-top">
+        <div class="updater-device-left">
+          <div class="updater-device-title">📱 Mobile / Laptop Device</div>
+          <div class="updater-device-sub" id="updDeviceSub">Waiting for updater presence...</div>
+        </div>
+
+        <div class="status-pill offline" id="updDeviceOnlinePill">Offline</div>
+      </div>
+
+      <div class="updater-device-grid">
+        <div class="upd-metric-card" id="updBatteryCard">
+          <div class="upd-metric-label">Battery</div>
+          <div class="upd-metric-value" id="updBatteryValue">--%</div>
+          <div class="upd-metric-sub" id="updBatteryMeta">Unavailable</div>
+        </div>
+
+        <div class="upd-metric-card" id="updNetworkCard">
+          <div class="upd-metric-label">Connection</div>
+          <div class="upd-metric-value" id="updNetworkValue">--</div>
+          <div class="upd-metric-sub" id="updNetworkMeta">No data</div>
+        </div>
+
+        <div class="upd-metric-card" id="updSignalCard">
+          <div class="upd-metric-label">Signal Strength</div>
+          <div class="upd-metric-value" id="updSignalBars">○○○○</div>
+          <div class="upd-metric-sub" id="updSignalMeta">0%</div>
+        </div>
+
+        <div class="upd-metric-card" id="updPushCard">
+          <div class="upd-metric-label">Push Mode</div>
+          <div class="upd-metric-value" id="updPushModeValue">AUTO</div>
+          <div class="upd-metric-sub" id="updPushModeMeta">Realtime enabled</div>
+        </div>
+
+        <div class="upd-metric-card">
+          <div class="upd-metric-label">Updater Ping</div>
+          <div class="upd-metric-value" id="updPingValue">-- ms</div>
+          <div class="upd-metric-sub" id="updPingMeta">No ping yet</div>
+        </div>
+
+        <div class="upd-metric-card" id="updStabilityCard">
+          <div class="upd-metric-label">Stability</div>
+          <div class="upd-metric-value" id="updStabilityValue">--</div>
+          <div class="upd-metric-sub" id="updStabilityMeta">No network analysis</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-label">System Health</div>
+      <div class="summary-ring" id="healthRing" style="background:conic-gradient(var(--red) 0%, #1b1b1b 0%);">
+        <span id="healthRingVal">0%</span>
+      </div>
+      <div class="summary-sub" id="healthSummary">No heartbeat received yet</div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-label">Realtime Traffic</div>
+      <div class="summary-ring" id="rtRing" style="background:conic-gradient(var(--blue) 0%, #1b1b1b 0%);">
+        <span id="rtRingVal">0/s</span>
+      </div>
+      <div class="summary-sub">Supabase Realtime throughput</div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-label">Database Quality</div>
+      <div class="summary-ring" id="dbRing" style="background:conic-gradient(var(--yellow) 0%, #1b1b1b 0%);">
+        <span id="dbRingVal">0%</span>
+      </div>
+      <div class="summary-sub" id="dbRingSummary">DB not checked yet</div>
+    </div>
+
+    <div class="summary-card" id="errorSummaryCard">
+      <div class="summary-label">Active Errors</div>
+      <div class="summary-big" id="totalErrorsBig" style="color:var(--red)">0</div>
+      <div class="summary-sub">
+        <span class="error-badge">
+          <span class="active" id="activeErrorCount">0 active</span>
+          ·
+          <span class="resolved" id="resolvedErrorCount">0 resolved</span>
+        </span>
+      </div>
+      <div class="summary-actions">
+        <button class="small-btn btn-danger-lite" onclick="resetAllErrors()">Reset Errors</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+     FIREBASE METRICS PANEL
+     Place this BELOW summary-grid
+     and ABOVE service-status-panel
+     ========================================== -->
+  <div class="panel metrics-panel">
+    <div class="panel-header">
+      <div class="panel-title">Firebase Billable Metrics & Load Metrics</div>
+      <div class="small-actions">
+        <button class="small-btn" onclick="resetFirebaseMetrics()">Reset Metrics</button>
+      </div>
+    </div>
+
+    <div class="panel-body">
+      <div class="firebase-metrics-grid">
+        <div class="metric-summary-card">
+          <div class="metric-summary-label">Estimated Reads</div>
+          <div class="metric-summary-value" id="fmReadsValue">0</div>
+          <div class="metric-summary-sub" id="fmReadsSub">0 / min</div>
+        </div>
+
+        <div class="metric-summary-card">
+          <div class="metric-summary-label">Estimated Writes</div>
+          <div class="metric-summary-value" id="fmWritesValue">0</div>
+          <div class="metric-summary-sub" id="fmWritesSub">0 / min</div>
+        </div>
+
+        <div class="metric-summary-card">
+          <div class="metric-summary-label">Listener Events</div>
+          <div class="metric-summary-value" id="fmListenerValue">0</div>
+          <div class="metric-summary-sub" id="fmListenerSub">0 / min</div>
+        </div>
+
+        <div class="metric-summary-card">
+          <div class="metric-summary-label">Est. Bandwidth</div>
+          <div class="metric-summary-value" id="fmBandwidthValue">0 KB</div>
+          <div class="metric-summary-sub" id="fmBandwidthSub">download + upload</div>
+        </div>
+      </div>
+
+      <div class="firebase-load-grid">
+        <div class="infra-box">
+          <div class="infra-title">Read Load</div>
+          <div class="progress">
+            <div id="fmReadLoadBar" style="width:0%;background:var(--blue)"></div>
+          </div>
+          <div class="progress-meta">
+            <span>Load</span>
+            <span id="fmReadLoadText">0%</span>
+          </div>
+        </div>
+
+        <div class="infra-box">
+          <div class="infra-title">Write Load</div>
+          <div class="progress">
+            <div id="fmWriteLoadBar" style="width:0%;background:var(--orange)"></div>
+          </div>
+          <div class="progress-meta">
+            <span>Load</span>
+            <span id="fmWriteLoadText">0%</span>
+          </div>
+        </div>
+
+        <div class="infra-box">
+          <div class="infra-title">Listener Load</div>
+          <div class="progress">
+            <div id="fmListenerLoadBar" style="width:0%;background:var(--green)"></div>
+          </div>
+          <div class="progress-meta">
+            <span>Load</span>
+            <span id="fmListenerLoadText">0%</span>
+          </div>
+        </div>
+
+        <div class="infra-box">
+          <div class="infra-title">Bandwidth Load</div>
+          <div class="progress">
+            <div id="fmBandwidthLoadBar" style="width:0%;background:var(--yellow)"></div>
+          </div>
+          <div class="progress-meta">
+            <span>Load</span>
+            <span id="fmBandwidthLoadText">0%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="firebase-chart-grid">
+        <div class="chart-card">
+          <div class="chart-title">Estimated Billable Reads / sec</div>
+          <div class="chart-bars" id="fmReadsBars"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Estimated Billable Writes / sec</div>
+          <div class="chart-bars" id="fmWritesBars"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Listener Events / sec</div>
+          <div class="chart-bars" id="fmListenerBars"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-title">Bandwidth KB / sec</div>
+          <div class="chart-bars" id="fmBandwidthBars"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel service-status-panel">
+    <div class="panel-header">
+      <div class="panel-title">Service Status</div>
+    </div>
+    <div class="panel-body">
+      <div class="services-wrap" id="serviceList"></div>
+    </div>
+  </div>
+  <div class="panel updater-device-panel">
+    <div class="panel-header">
+      <div class="panel-title">Score Updater Device Status</div>
+    </div>
+
+
+  </div>
+
+  <div class="middle-grid">
+    <div class="panel fill-panel middle-alerts">
+      <div class="panel-header">
+        <div class="panel-title">Alerts (Console Errors + Failures)</div>
+        <div class="small-actions">
+          <button class="small-btn" onclick="clearAlerts()">Clear</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="alert-list" id="alertList"></div>
+      </div>
+    </div>
+
+    <div class="panel fill-panel middle-live">
+      <div class="panel-header">
+        <div class="panel-title">Live Match Feed</div>
+        <div class="small-actions">
+          <button class="small-btn" onclick="manualRefresh()">Refresh</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="match-shell">
+          <div class="match-top">
+            <div class="match-id" id="matchBadge">my_match_999</div>
+            <div class="status-pill offline" id="matchTypePill">limited</div>
+          </div>
+
+          <div class="score-grid">
+            <div class="score-side left">
+              <div class="team-code" id="batTeam">BAT</div>
+              <div class="score-big" id="scoreValue">0/0</div>
+              <div class="score-meta" id="oversValue">0.0 overs</div>
+            </div>
+
+            <div class="vs-col">
+              <div class="vs-line"></div>
+              <div class="vs-text">VS</div>
+              <div class="vs-line"></div>
+            </div>
+
+            <div class="score-side right">
+              <div class="team-code" id="bowlTeam">BOWL</div>
+              <div class="score-meta" id="targetValue">Target 0</div>
+              <div class="score-meta" id="rrrValue">RRR 0.00</div>
+            </div>
+          </div>
+
+          <div class="sparkline-wrap">
+            <div class="spark-title">Recent Overs (Runs Scored)</div>
+            <div class="sparkline-container" id="sparklineContainer">
+              <span style="color:var(--muted); font-size:.7rem; width:100%; text-align:center;">
+                Waiting for over completion...
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-mini">
+            <div class="label">Runs</div>
+            <div class="value" id="miniRuns">0</div>
+          </div>
+          <div class="stat-mini">
+            <div class="label">Wickets</div>
+            <div class="value" id="miniWkts">0</div>
+          </div>
+          <div class="stat-mini">
+            <div class="label">Balls</div>
+            <div class="value" id="miniBalls">0</div>
+          </div>
+          <div class="stat-mini">
+            <div class="label">CRR</div>
+            <div class="value" id="miniCrr">0.00</div>
+          </div>
+          <div class="stat-mini">
+            <div class="label">Partnership</div>
+            <div class="value" id="miniPart">0 (0)</div>
+          </div>
+          <div class="stat-mini">
+            <div class="label">Win Prob</div>
+            <div class="value" id="miniWinProb">0%</div>
+          </div>
+        </div>
+
+        <div class="over-card">
+          <div class="over-head">
+            <div class="over-label">Current Over</div>
+            <div class="status-pill offline" id="freeHitPill">No Free Hit</div>
+          </div>
+          <div class="over-balls" id="overBalls"></div>
+        </div>
+
+        <div class="upcoming-card" id="upcomingCard">
+          <div class="avatar" style="margin:0" id="upcomingAvatar">U</div>
+          <div>
+            <div class="upcoming-tag">Upcoming Batter</div>
+            <div class="upcoming-name" id="upcomingName">Unknown</div>
+          </div>
+        </div>
+
+        <div class="players-grid">
+          <div class="player-card striker">
+            <div class="player-role">Striker</div>
+            <div class="avatar" id="strikerAvatar">S</div>
+            <div class="player-name striker-name" id="strikerName">Not Connected</div>
+            <div class="player-stats" id="strikerStats">0 (0) • 4s:0 • 6s:0</div>
+          </div>
+
+          <div class="player-card">
+            <div class="player-role">Non-Striker</div>
+            <div class="avatar" id="nonStrikerAvatar">N</div>
+            <div class="player-name" id="nonStrikerName">Not Connected</div>
+            <div class="player-stats" id="nonStrikerStats">0 (0) • 4s:0 • 6s:0</div>
+          </div>
+
+          <div class="player-card bowler">
+            <div class="player-role">Current Bowler</div>
+            <div class="avatar" id="bowlerAvatar">B</div>
+            <div class="player-name bowler-name" id="bowlerName">Not Connected</div>
+            <div class="player-stats" id="bowlerStats">0-0 0.0</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel fill-panel middle-god">
+      <div class="panel-header">
+        <div class="panel-title" style="color:var(--red)">🛑 God Mode Controls</div>
+      </div>
+      <div class="panel-body">
+
+        <!-- Sound Toggle -->
+        <div class="settings-section">
+          <label class="toggle-label sound-toggle">
+            <input type="checkbox" id="alertSoundToggle" checked onchange="toggleAlertSound(this.checked)">
+            <span class="toggle-icon">🔊</span>
+            <span class="toggle-text">Critical Alert Sound</span>
+            <span class="toggle-status" id="soundStatus">ON</span>
+          </label>
+        </div>
+
+        <div class="god-mode-grid">
+          <button class="btn-god danger" onclick="godModeKillGraphics()"><i>🚫</i> Kill Graphics</button>
+          <button class="btn-god warn" onclick="godModeAlertScorer()"><i>💬</i> Msg Scorer</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel fill-panel middle-infra">
+      <div class="panel-header">
+        <div class="panel-title">Infrastructure Health</div>
+      </div>
+      <div class="panel-body">
+        <div class="infra-grid">
+          <div class="infra-box">
+            <div class="infra-title">Realtime Quality</div>
+            <div class="progress">
+              <div id="rtQualityBar" style="width:0%;background:var(--blue)"></div>
+            </div>
+            <div class="progress-meta"><span>Quality</span><span id="rtQualityText">0%</span></div>
+          </div>
+
+          <div class="infra-box">
+            <div class="infra-title">DB Quality</div>
+            <div class="progress">
+              <div id="dbQualityBar" style="width:0%;background:var(--yellow)"></div>
+            </div>
+            <div class="progress-meta"><span>Quality</span><span id="dbQualityText">0%</span></div>
+          </div>
+
+          <div class="infra-box">
+            <div class="infra-title">Error Pressure</div>
+            <div class="progress">
+              <div id="errorLoadBar" style="width:0%;background:var(--red)"></div>
+            </div>
+            <div class="progress-meta"><span>Pressure</span><span id="errorLoadText">0%</span></div>
+          </div>
+
+          <div class="infra-box">
+            <div class="infra-title">HTTP Load</div>
+            <div class="progress">
+              <div id="httpLoadBar" style="width:0%;background:var(--green)"></div>
+            </div>
+            <div class="progress-meta"><span>Req/s</span><span id="httpLoadText">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel fill-panel middle-log">
+      <div class="panel-header">
+        <div class="panel-title">System Log</div>
+        <div class="small-actions">
+          <button class="small-btn" id="pauseLogBtn" onclick="togglePauseLogs()">Pause</button>
+          <button class="small-btn" onclick="clearLogs()">Clear</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="log-list" id="logList"></div>
+      </div>
+    </div>
+
+    <div class="panel fill-panel middle-traffic">
+      <div class="panel-header">
+        <div class="panel-title">Traffic</div>
+      </div>
+      <div class="panel-body">
+        <div class="chart-card">
+          <div class="chart-title">Realtime Msgs / second</div>
+          <div class="chart-bars" id="rtBars"></div>
+        </div>
+
+        <div class="chart-card" style="margin-top:12px">
+          <div class="chart-title">HTTP Requests / second</div>
+          <div class="chart-bars" id="httpBars"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-grid">
+    <div class="panel flow-panel">
+      <div class="panel-header">
+        <div class="panel-title">Data Flow Topology</div>
+      </div>
+      <div class="panel-body" style="padding:0;">
+        <div class="topology-sideflow" id="dataMap">
+          <div class="topology-sideflow-bg"></div>
+
+          <svg id="flowSvg" class="topology-sideflow-svg" viewBox="0 0 1000 480" preserveAspectRatio="none">
+            <defs>
+              <filter id="flowGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.2" result="blur"></feGaussianBlur>
+                <feMerge>
+                  <feMergeNode in="blur"></feMergeNode>
+                  <feMergeNode in="blur"></feMergeNode>
+                  <feMergeNode in="SourceGraphic"></feMergeNode>
+                </feMerge>
+              </filter>
+            </defs>
+
+            <path d="M 190 140 C 290 140, 360 190, 500 240" class="flow-rail flow-rail-glow"></path>
+            <path d="M 190 340 C 290 340, 360 290, 500 240" class="flow-rail flow-rail-glow"></path>
+            <path d="M 500 240 C 620 240, 700 240, 810 240" class="flow-rail flow-rail-glow"></path>
+
+            <path id="path-admin" d="M 190 140 C 290 140, 360 190, 500 240" class="flow-rail"></path>
+            <path id="path-updater" d="M 190 340 C 290 340, 360 290, 500 240" class="flow-rail"></path>
+            <path id="path-scorebar" d="M 500 240 C 620 240, 700 240, 810 240" class="flow-rail"></path>
+          </svg>
+
+          <div class="tree-node tree-node-admin" style="left:19%; top:29%;">
+            <div class="tree-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div class="tree-label">Admin</div>
+          </div>
+
+          <div class="tree-node tree-node-updater" style="left:19%; top:71%;">
+            <div class="tree-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            </div>
+            <div class="tree-label">Updater</div>
+          </div>
+
+          <div class="tree-node tree-node-db" style="left:50%; top:50%;">
+            <div class="tree-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+              </svg>
+            </div>
+            <div class="tree-label tree-label-db">Supabase</div>
+          </div>
+
+          <div class="tree-node tree-node-scorebar" style="left:81%; top:50%;">
+            <div class="tree-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+            </div>
+            <div class="tree-label">Scorebar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel profile-panel">
+      <div class="panel-header">
+        <div class="panel-title">Live Profile</div>
+      </div>
+      <div class="panel-body">
+        <div class="profile-card">
+          <div class="profile-empty" id="profileEmpty">
+            No active player profile broadcast yet.
+          </div>
+          <div class="profile-wrap" id="profileWrap" style="display:none">
+            <div class="profile-avatar" id="profileAvatar">P</div>
+            <div>
+              <div class="profile-role" id="profileRole">PLAYER</div>
+              <div class="profile-name" id="profileName">Unknown</div>
+              <div class="profile-meta" id="profileMeta">No profile data</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="monitor.js"></script>
+</body>
+
+</html>

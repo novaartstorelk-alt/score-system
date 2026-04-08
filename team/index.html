@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Manager - Cricket Live Score</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+    <link rel="stylesheet" href="team.css">
+
+
+</head>
+
+<body>
+    <!-- Error Popup -->
+    <div class="error-popup" id="errorPopup">
+        <button class="error-popup-close" onclick="hideErrorPopup()">✕</button>
+        <div class="error-popup-content">
+            <div class="error-popup-icon">⚠️</div>
+            <div class="error-popup-body">
+                <div class="error-popup-title" id="errorPopupTitle">Connection Error</div>
+                <div class="error-popup-message" id="errorPopupMessage">Failed to connect to database.</div>
+            </div>
+        </div>
+        <div class="error-popup-progress"></div>
+    </div>
+
+    <!-- Success Popup -->
+    <div class="success-popup" id="successPopup">
+        <button class="success-popup-close" onclick="hideSuccessPopup()">✕</button>
+        <div class="success-popup-content">
+            <div class="success-popup-icon">✅</div>
+            <div class="success-popup-body">
+                <div class="success-popup-title" id="successPopupTitle">Success</div>
+                <div class="success-popup-message" id="successPopupMessage">Operation completed successfully.</div>
+            </div>
+        </div>
+        <div class="success-popup-progress"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <p class="loading-text" id="loadingText">Loading...</p>
+        <p class="loading-subtext" id="loadingSubtext">Please wait</p>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <h1>🏏 Team Manager</h1>
+                <span class="header-badge">V2.0</span>
+            </div>
+            <div class="header-actions">
+                <a href="admin.html" class="btn btn-secondary">
+                    ← Back to Admin
+                </a>
+                <button class="btn btn-secondary" onclick="exportSupabaseData()" id="btnExportData">
+                    📤 Export Data
+                </button>
+
+                <!-- Refresh button එක <div class="toolbar"> ඇතුලෙ -->
+                <button class="btn btn-secondary" id="btnRefresh" onclick="loadTeams()">
+                    🔄 Refresh
+                </button>
+                <button class="btn btn-outline" onclick="forceRefreshTeams()" title="Clear cache and reload">
+                    ⚡ Force Refresh
+                </button>
+                <button class="btn btn-primary" onclick="openTeamModal()">
+                    ➕ Add New Team
+                </button>
+            </div>
+        </div>
+
+        <!-- Connection Status Panel -->
+        <div class="conn-panel" id="connPanel">
+            <div class="conn-panel-header">
+                <div class="conn-panel-title">
+                    <span>📡 Supabase Connection</span>
+                </div>
+                <div class="conn-status-badge connecting" id="connStatusBadge">
+                    <div class="conn-dot connecting" id="connDot"></div>
+                    <span id="connStatusText">Connecting...</span>
+                </div>
+            </div>
+
+            <div class="conn-details-grid">
+                <div class="conn-detail-item">
+                    <div class="conn-detail-label">📍 Project URL</div>
+                    <div class="conn-detail-value info" id="connProjectUrl" style="font-size:0.75rem;">--</div>
+                </div>
+                <div class="conn-detail-item">
+                    <div class="conn-detail-label">🔗 Status</div>
+                    <div class="conn-detail-value" id="connState">Initializing</div>
+                </div>
+                <div class="conn-detail-item">
+                    <div class="conn-detail-label">⏱️ Response Time</div>
+                    <div class="conn-detail-value" id="connPing">-- ms</div>
+                </div>
+                <div class="conn-detail-item">
+                    <div class="conn-detail-label">🕐 Last Sync</div>
+                    <div class="conn-detail-value" id="connLastSync">--</div>
+                </div>
+                <div class="conn-detail-item">
+                    <div class="conn-detail-label">📋 Teams</div>
+                    <div class="conn-detail-value success" id="connTeamsCount">0</div>
+                </div>
+                <div class="conn-detail-item">
+                    <div class="conn-detail-label">👥 Players</div>
+                    <div class="conn-detail-value success" id="connPlayersCount">0</div>
+                </div>
+            </div>
+
+            <div class="conn-actions">
+                <button class="btn btn-sm btn-secondary" onclick="testConnection()" id="btnTestConn">
+                    🔄 Test Connection
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="loadTeams()" id="btnRefresh">
+                    ♻️ Refresh Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="stats-row">
+            <div class="stat-card animate-fade-in-up stagger-2">
+                <h3>📋 Total Teams</h3>
+                <div class="value" id="statTotalTeams">0</div>
+                <div class="sub-value">Registered teams</div>
+            </div>
+            <div class="stat-card animate-fade-in-up stagger-3">
+                <h3>👥 Total Players</h3>
+                <div class="value" id="statTotalPlayers">0</div>
+                <div class="sub-value">Across all teams</div>
+            </div>
+            <div class="stat-card animate-fade-in-up stagger-4">
+                <h3>⭐ With Captains</h3>
+                <div class="value" id="statWithCaptains">0</div>
+                <div class="sub-value">Teams with captain</div>
+            </div>
+            <div class="stat-card animate-fade-in-up stagger-5">
+                <h3>🕐 Last Updated</h3>
+                <div class="value" id="statLastUpdated" style="font-size:0.95rem;">--</div>
+                <div class="sub-value">Data refresh time</div>
+            </div>
+        </div>
+
+        <!-- Teams Section -->
+        <div class="section-header animate-fade-in-up">
+            <div class="section-title">
+                <span>🏆 All Teams</span>
+                <span style="font-size:0.8rem; color:var(--text-secondary); font-weight:500;" id="teamsCountLabel">(0
+                    teams)</span>
+            </div>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Search teams..." oninput="filterTeamsSearch()">
+            </div>
+        </div>
+
+        <div class="teams-grid" id="teamsGrid">
+            <!-- Teams will be loaded here -->
+        </div>
+
+        <div class="empty-state" id="emptyState" style="display:none;">
+            <div class="empty-state-icon">🏏</div>
+            <h3>No Teams Yet!</h3>
+            <p>Add your first team to get started with the cricket scoring system.</p>
+            <button class="btn btn-primary" onclick="openTeamModal()">
+                ➕ Add Your First Team
+            </button>
+        </div>
+    </div>
+
+    <!-- Add/Edit Team Modal -->
+    <div class="modal-overlay" id="teamModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">➕ Add New Team</h2>
+                <button class="btn-close" onclick="closeTeamModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="teamForm" onsubmit="return false;">
+                    <input type="hidden" id="editTeamId" value="">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Team Full Name <span class="required">*</span></label>
+                            <input type="text" id="inputTeamName" placeholder="e.g. St. Thomas' College" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Short Name (3-5 chars) <span class="required">*</span></label>
+                            <input type="text" id="inputShortName" placeholder="e.g. STC" maxlength="5"
+                                style="text-transform:uppercase;" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Team Logo</label>
+                        <div class="logo-upload-section">
+                            <div class="logo-preview" id="logoPreview">
+                                <div class="placeholder">
+                                    <div class="placeholder-icon">📷</div>
+                                    <div>No Logo</div>
+                                </div>
+                            </div>
+                            <div class="logo-upload-controls">
+                                <div class="file-input-wrapper">
+                                    <input type="file" id="inputLogoFile" accept="image/*"
+                                        onchange="handleLogoUpload(this)">
+                                    <label for="inputLogoFile" class="file-label">
+                                        📁 Choose Logo Image
+                                    </label>
+                                </div>
+                                <p class="file-hint">
+                                    💡 Recommended: 200x200px PNG with transparent background
+                                </p>
+                                <button type="button" class="btn-remove-logo" id="btnRemoveLogo" onclick="removeLogo()">
+                                    🗑️ Remove Logo
+                                </button>
+                            </div>
+                        </div>
+                        <input type="hidden" id="inputLogoUrl" value="">
+                    </div>
+
+                    <div class="section-divider">
+                        <h3>👥 Squad Players</h3>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="addPlayerRow()">
+                            ➕ Add Player
+                        </button>
+                    </div>
+
+                    <div class="players-list" id="playersList">
+                        <!-- Player rows will be added here -->
+                    </div>
+
+                    <div class="player-preview-panel" id="playerPreviewPanel">
+                        <div class="player-preview-header">
+                            <h4>📄 Player Report Preview</h4>
+                            <span class="player-preview-hint">Live preview for selected row</span>
+                        </div>
+                        <div class="player-preview-card">
+                            <div class="player-preview-photo" id="previewPlayerPhoto">
+                                <span>👤</span>
+                            </div>
+                            <div class="player-preview-content">
+                                <div class="player-preview-role" id="previewPlayerRole">PLAYER ROLE</div>
+                                <div class="player-preview-name" id="previewPlayerName">Select or edit a player</div>
+                                <div class="player-preview-meta">
+                                    <span id="previewPlayerSchool">School not set</span>
+                                    <span>•</span>
+                                    <span id="previewPlayerAge">Age --</span>
+                                    <span>•</span>
+                                    <span id="previewPlayerJersey">#--</span>
+                                </div>
+                                <div class="player-preview-captain" id="previewPlayerCaptain">PLAYER</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="addPlayerRow()"
+                        style="width:100%; margin-top:15px;">
+                        ➕ Add Another Player
+                    </button>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeTeamModal()">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="saveTeam()" id="btnSaveTeam">
+                    💾 Save Team
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay delete-modal" id="deleteModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 style="color:#fca5a5;">⚠️ Delete Team</h2>
+                <button class="btn-close" onclick="closeDeleteModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="delete-icon">🗑️</div>
+                <p style="color:var(--text-secondary);">Are you sure you want to delete</p>
+                <div class="delete-team-name" id="deleteTeamName">Team Name</div>
+                <p class="delete-warning">
+                    This will permanently delete the team and all <strong id="deletePlayerCount">0</strong> players.
+                    This action cannot be undone.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()" id="btnConfirmDelete">
+                    🗑️ Delete Team
+                </button>
+            </div>
+        </div>
+    </div>
+    <script src="team.js"></script>
+</body>
+
+</html>

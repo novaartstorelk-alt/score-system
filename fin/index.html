@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Score Admin Panel V27</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link rel="stylesheet" href="admin.css">
+</head>
+
+<body>
+
+    <!-- Toasts -->
+    <div class="toast" id="toastSuccess">
+        <span class="toast-icon">✅</span>
+        <span class="toast-text" id="toastSuccessText">Success</span>
+    </div>
+
+    <div class="toast toast-error" id="toastError">
+        <span class="toast-icon">❌</span>
+        <span class="toast-text" id="toastErrorText">Error</span>
+    </div>
+
+    <!-- Team Selector Modal -->
+    <div class="modal-overlay" id="teamSelectorModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="teamModalTitle">Select Team</h3>
+                <button class="btn-close" onclick="closeTeamSelector()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" class="modal-search" id="teamSearch" placeholder="Search teams..."
+                    oninput="filterTeams()">
+                <div class="team-list" id="teamList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic Player Picker Modal -->
+    <div class="modal-overlay" id="playerPickerModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="playerPickerTitle">Select Player</h3>
+                <button class="btn-close" onclick="closePlayerPicker()">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" class="modal-search" id="playerPickerSearch" placeholder="Search players..."
+                    oninput="filterPlayerPicker()">
+                <div class="player-select-list" id="playerPickerList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Next Bowler Popup -->
+    <div class="popup-overlay" id="bowlerPopup">
+        <div class="popup-card">
+            <div class="popup-header">
+                <span class="popup-icon">🎯</span>
+                <h3>Over Complete</h3>
+                <p>Select next bowler</p>
+            </div>
+            <div class="popup-body">
+                <div class="bowler-select-list" id="bowlerSelectList"></div>
+            </div>
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeBowlerPopup()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmNextBowler()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wicket Popup -->
+    <div class="popup-overlay" id="wicketPopup">
+        <div class="popup-card">
+            <div class="popup-header">
+                <span class="popup-icon">🏏</span>
+                <h3>WICKET</h3>
+                <p>Select wicket type</p>
+            </div>
+            <div class="popup-body">
+                <div class="wicket-type-grid">
+                    <button class="wicket-type-btn" onclick="selectWicketType('Bowled')">
+                        <span class="wt-icon">🎯</span>
+                        <span class="wt-label">Bowled</span>
+                    </button>
+                    <button class="wicket-type-btn" onclick="selectWicketType('Caught')">
+                        <span class="wt-icon">🧤</span>
+                        <span class="wt-label">Caught</span>
+                    </button>
+                    <button class="wicket-type-btn" onclick="selectWicketType('LBW')">
+                        <span class="wt-icon">🦵</span>
+                        <span class="wt-label">LBW</span>
+                    </button>
+                    <button class="wicket-type-btn" onclick="selectWicketType('Run Out')">
+                        <span class="wt-icon">🏃</span>
+                        <span class="wt-label">Run Out</span>
+                    </button>
+                    <button class="wicket-type-btn" onclick="selectWicketType('Stumped')">
+                        <span class="wt-icon">🪵</span>
+                        <span class="wt-label">Stumped</span>
+                    </button>
+                    <button class="wicket-type-btn" onclick="selectWicketType('Hit Wicket')">
+                        <span class="wt-icon">💥</span>
+                        <span class="wt-label">Hit Wicket</span>
+                    </button>
+                </div>
+            </div>
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeWicketPopup()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Next Batsman Popup (After Wicket) -->
+    <div class="popup-overlay" id="nextBatsmanPopup">
+        <div class="popup-card">
+            <div class="popup-header">
+                <span class="popup-icon">🏏</span>
+                <h3>SELECT NEXT BATSMAN</h3>
+                <p>Choose the incoming batter</p>
+            </div>
+            <div class="popup-body">
+                <input type="text" class="modal-search" id="nextBatsmanSearch" placeholder="Search players..."
+                    oninput="filterNextBatsmanList()">
+                <div class="player-select-list" id="nextBatsmanList"></div>
+            </div>
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeNextBatsmanPopup()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmNextBatsman()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Player Profile Modal -->
+    <div class="modal-overlay" id="playerProfileModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Show Player Profile</h3>
+                <button class="btn-close" onclick="closePlayerProfileModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-preview">
+                    <div class="profile-photo">
+                        <img src="" id="profilePreviewPhoto" alt="Player">
+                    </div>
+                    <div class="profile-info">
+                        <input type="text" id="profileRole" placeholder="Role">
+                        <input type="text" id="profileName" placeholder="Player Name">
+                        <input type="text" id="profileSchool" placeholder="School">
+                        <input type="text" id="profileAge" placeholder="Age">
+                    </div>
+                </div>
+                <div class="player-select-list" id="playerSelectList"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closePlayerProfileModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmShowProfile()">Show Profile</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Animation Settings Modal -->
+    <div class="modal-overlay" id="animationSettingsModal">
+        <div class="modal-card modal-lg">
+            <div class="modal-header">
+                <h3>⚡ Animation Settings</h3>
+                <button class="btn-close" onclick="closeAnimationSettings()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4 class="settings-section-title">🎬 Hype Animations</h4>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>Four Display Duration</label>
+                            <div class="setting-control">
+                                <input type="range" id="setFourDuration" min="1000" max="5000" step="100" value="2500">
+                                <span class="setting-value" id="valFourDuration">2.5s</span>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <label>Six Display Duration</label>
+                            <div class="setting-control">
+                                <input type="range" id="setSixDuration" min="1000" max="5000" step="100" value="2500">
+                                <span class="setting-value" id="valSixDuration">2.5s</span>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <label>Wicket Display Duration</label>
+                            <div class="setting-control">
+                                <input type="range" id="setWicketDuration" min="1500" max="6000" step="100"
+                                    value="3000">
+                                <span class="setting-value" id="valWicketDuration">3.0s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title">👤 Player Profile</h4>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>Profile Display Duration</label>
+                            <div class="setting-control">
+                                <input type="range" id="setProfileDuration" min="3000" max="10000" step="500"
+                                    value="5000">
+                                <span class="setting-value" id="valProfileDuration">5.0s</span>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <label>New Batter Entry Delay</label>
+                            <div class="setting-control">
+                                <input type="range" id="setNewBatterDelay" min="500" max="4000" step="100" value="1600">
+                                <span class="setting-value" id="valNewBatterDelay">1.6s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title">🔄 Carousel</h4>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>Auto Rotate Interval</label>
+                            <div class="setting-control">
+                                <input type="range" id="setCarouselInterval" min="5000" max="30000" step="1000"
+                                    value="20000">
+                                <span class="setting-value" id="valCarouselInterval">20s</span>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <label>View Hold Duration</label>
+                            <div class="setting-control">
+                                <input type="range" id="setViewHoldDuration" min="3000" max="15000" step="500"
+                                    value="7000">
+                                <span class="setting-value" id="valViewHoldDuration">7.0s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title">⭐ Milestones</h4>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>50/100 Celebration Duration</label>
+                            <div class="setting-control">
+                                <input type="range" id="setMilestoneDuration" min="4000" max="12000" step="500"
+                                    value="8000">
+                                <span class="setting-value" id="valMilestoneDuration">8.0s</span>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <label>Auto Result Delay</label>
+                            <div class="setting-control">
+                                <input type="range" id="setResultDelay" min="1000" max="5000" step="100" value="3000">
+                                <span class="setting-value" id="valResultDelay">3.0s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h4 class="settings-section-title">🎯 Hype Queue</h4>
+                    <p class="settings-hint">When winning run is a 4/6, show boundary hype first, then result card.</p>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>Gap Between Queued Animations</label>
+                            <div class="setting-control">
+                                <input type="range" id="setQueueGap" min="200" max="2000" step="100" value="500">
+                                <span class="setting-value" id="valQueueGap">0.5s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="resetAnimationSettings()">🔄 Reset Defaults</button>
+                <button class="btn btn-primary" onclick="saveAnimationSettings()">💾 Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1>🏏 Admin Panel</h1>
+                <span class="version-badge">V27 Supabase</span>
+            </div>
+            <div class="header-right">
+                <div class="auto-update-toggle">
+                    <span>Auto Update</span>
+                    <label class="switch">
+                        <input type="checkbox" id="autoUpdateToggle" checked onchange="toggleAutoUpdate()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="window.location.href='team-manager.html'">
+                    👥 Teams
+                </button>
+            </div>
+        </header>
+
+        <!-- Connection Panel - Updated for Supabase -->
+        <div class="conn-panel glass-card" id="connPanel">
+            <div class="conn-header">
+                <div class="conn-title">
+                    <span class="conn-icon">📡</span>
+                    <span>Connection Status</span>
+                </div>
+                <div class="conn-badges">
+                    <div class="conn-badge" id="supabaseBadge">
+                        <span class="conn-dot connecting"></span>
+                        <span id="supabaseStatus">Supabase: Connecting...</span>
+                    </div>
+                    <div class="conn-badge" id="realtimeBadge">
+                        <span class="conn-dot connecting"></span>
+                        <span id="realtimeStatus">Realtime: Connecting...</span>
+                    </div>
+                    <div class="conn-badge" id="updaterBadge">
+                        <span class="conn-dot offline"></span>
+                        <span id="updaterStatus">Updater: Offline</span>
+                    </div>
+                    <div class="conn-badge" id="scorebarBadge">
+                        <span class="conn-dot offline"></span>
+                        <span id="scorebarStatus">Scorebar: Offline</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="conn-stats">
+                <div class="conn-stat">
+                    <span class="stat-label">Realtime Ping</span>
+                    <span class="stat-value" id="realtimePingValue">-- ms</span>
+                    <div class="ping-bar">
+                        <div class="ping-fill" id="realtimePingFill"></div>
+                    </div>
+                </div>
+
+                <div class="conn-stat">
+                    <span class="stat-label">Scorebar Ping</span>
+                    <span class="stat-value" id="scorebarPingValue">-- ms</span>
+                    <div class="ping-bar">
+                        <div class="ping-fill" id="scorebarPingFill"></div>
+                    </div>
+                </div>
+
+                <div class="conn-stat">
+                    <span class="stat-label">Messages Sent</span>
+                    <span class="stat-value" id="msgSent">0</span>
+                </div>
+
+                <div class="conn-stat">
+                    <span class="stat-label">Last Sync</span>
+                    <span class="stat-value" id="lastSync">--</span>
+                </div>
+
+                <div class="conn-stat">
+                    <span class="stat-label">Updater Last Ping</span>
+                    <span class="stat-value" id="updaterLastPing">--</span>
+                </div>
+
+                <div class="conn-stat">
+                    <span class="stat-label">Scorebar Last Ping</span>
+                    <span class="stat-value" id="scorebarLastPing">--</span>
+                </div>
+
+                <div class="conn-stat">
+                    <span class="stat-label">Network</span>
+                    <span class="stat-value" id="networkStatus">
+                        <span class="network-indicator good"></span>Strong
+                    </span>
+                </div>
+            </div>
+
+            <div class="conn-actions">
+                <button class="btn btn-sm btn-secondary" onclick="testConnection()">🔄 Test Connection</button>
+                <button class="btn btn-sm btn-secondary" onclick="reconnect()">🔌 Reconnect</button>
+                <div class="match-id-display">
+                    <span>Match ID:</span>
+                    <code id="matchIdDisplay">--</code>
+                    <button class="btn-copy" onclick="copyMatchId()">📋</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manual Update -->
+        <button class="manual-update-btn" id="manualUpdateBtn" onclick="forceSend()">⬆️ PUSH TO SCOREBOARD</button>
+
+        <!-- NEW: Active Players Section -->
+        <div class="card glass-card active-players-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🎯</span>Active Players</div>
+            </div>
+            <div class="card-body">
+                <div class="active-players-grid">
+                    <!-- Striker Card -->
+                    <div class="active-player-card striker-card" id="activeStriker">
+                        <div class="apc-header">
+                            <span class="apc-badge striker">▶ STRIKER</span>
+                        </div>
+                        <div class="apc-photo" id="activeStrikerPhoto">
+                            <span>?</span>
+                        </div>
+                        <div class="apc-name" id="activeStrikerName">Select Batsman</div>
+                        <div class="apc-stats">
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeStrikerRuns">0</span>
+                                <span class="apc-stat-label">Runs</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeStrikerBalls">0</span>
+                                <span class="apc-stat-label">Balls</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeStrikerFours">0</span>
+                                <span class="apc-stat-label">4s</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeStrikerSixes">0</span>
+                                <span class="apc-stat-label">6s</span>
+                            </div>
+                        </div>
+                        <div class="apc-sr">SR: <span id="activeStrikerSR">0.00</span></div>
+                    </div>
+
+                    <!-- Non-Striker Card -->
+                    <div class="active-player-card nonstriker-card" id="activeNonStriker">
+                        <div class="apc-header">
+                            <span class="apc-badge nonstriker">NON-STRIKER</span>
+                        </div>
+                        <div class="apc-photo" id="activeNonStrikerPhoto">
+                            <span>?</span>
+                        </div>
+                        <div class="apc-name" id="activeNonStrikerName">Select Batsman</div>
+                        <div class="apc-stats">
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeNonStrikerRuns">0</span>
+                                <span class="apc-stat-label">Runs</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeNonStrikerBalls">0</span>
+                                <span class="apc-stat-label">Balls</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeNonStrikerFours">0</span>
+                                <span class="apc-stat-label">4s</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeNonStrikerSixes">0</span>
+                                <span class="apc-stat-label">6s</span>
+                            </div>
+                        </div>
+                        <div class="apc-sr">SR: <span id="activeNonStrikerSR">0.00</span></div>
+                    </div>
+
+                    <!-- Bowler Card -->
+                    <div class="active-player-card bowler-card" id="activeBowler">
+                        <div class="apc-header">
+                            <span class="apc-badge bowler">🎯 BOWLER</span>
+                        </div>
+                        <div class="apc-photo" id="activeBowlerPhoto">
+                            <span>?</span>
+                        </div>
+                        <div class="apc-name" id="activeBowlerName">Select Bowler</div>
+                        <div class="apc-stats">
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeBowlerWickets">0</span>
+                                <span class="apc-stat-label">Wkts</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeBowlerRuns">0</span>
+                                <span class="apc-stat-label">Runs</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeBowlerOvers">0.0</span>
+                                <span class="apc-stat-label">Overs</span>
+                            </div>
+                            <div class="apc-stat">
+                                <span class="apc-stat-value" id="activeBowlerEcon">0.00</span>
+                                <span class="apc-stat-label">Econ</span>
+                            </div>
+                        </div>
+                        <div class="apc-figs">Figures: <span id="activeBowlerFigs">0-0</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Match Setup -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">📋</span>Match Setup</div>
+                <div class="card-controls">
+                    <label class="lock-toggle">
+                        <input type="checkbox" id="lockSetup" onchange="toggleLock('setup')">
+                        <span class="lock-icon">🔓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body" id="setupSection">
+                <div class="match-type-selector">
+                    <label>Match Type</label>
+                    <div class="type-options">
+                        <button class="type-btn active" id="typeLimit" onclick="setMatchType('limited')">
+                            <span class="type-icon">⚡</span>
+                            <span class="type-label">Limited Overs</span>
+                            <span class="type-sub">T20 / ODI</span>
+                        </button>
+                        <button class="type-btn" id="typeTest" onclick="setMatchType('test')">
+                            <span class="type-icon">🏛️</span>
+                            <span class="type-label">Multi-Day</span>
+                            <span class="type-sub">Test / 2-Day</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overs-preset-section" id="limitedOversSection">
+                    <label>Overs Format</label>
+
+                    <div class="overs-preset-grid">
+                        <button type="button" class="overs-preset-btn active" id="oversPreset_t10"
+                            onclick="setOversPreset('t10')">
+                            <span class="overs-preset-title">T10</span>
+                            <span class="overs-preset-sub">10 Overs</span>
+                        </button>
+
+                        <button type="button" class="overs-preset-btn" id="oversPreset_t20"
+                            onclick="setOversPreset('t20')">
+                            <span class="overs-preset-title">T20</span>
+                            <span class="overs-preset-sub">20 Overs</span>
+                        </button>
+
+                        <button type="button" class="overs-preset-btn" id="oversPreset_odi"
+                            onclick="setOversPreset('odi')">
+                            <span class="overs-preset-title">ODI</span>
+                            <span class="overs-preset-sub">50 Overs</span>
+                        </button>
+
+                        <button type="button" class="overs-preset-btn" id="oversPreset_custom"
+                            onclick="setOversPreset('custom')">
+                            <span class="overs-preset-title">Custom</span>
+                            <span class="overs-preset-sub">Manual Overs</span>
+                        </button>
+                    </div>
+
+                    <div class="custom-overs-row" id="customOversRow">
+                        <input type="number" id="customTotalOvers" min="1" max="100" value="20"
+                            placeholder="Enter overs" oninput="syncCustomOvers()">
+                        <span class="custom-overs-hint">Overs per innings</span>
+                    </div>
+
+                    <div class="overs-preset-summary" id="oversPresetSummary">20 overs per innings</div>
+                </div>
+
+                <div class="test-options" id="testOptions">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Current Day</label>
+                            <select id="testDay">
+                                <option value="1">Day 1</option>
+                                <option value="2">Day 2</option>
+                                <option value="3">Day 3</option>
+                                <option value="4">Day 4</option>
+                                <option value="5">Day 5</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Session</label>
+                            <select id="testSession">
+                                <option value="1">Session 1</option>
+                                <option value="2">Session 2</option>
+                                <option value="3">Session 3</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Current Innings</label>
+                            <select id="testInnings">
+                                <option value="1">1st Innings</option>
+                                <option value="2">2nd Innings</option>
+                                <option value="3">3rd Innings</option>
+                                <option value="4">4th Innings</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Special Overlay -->
+        <div class="card glass-card special-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">⚡</span>Special Overlay</div>
+                <div class="card-controls">
+                    <label class="switch special">
+                        <input type="checkbox" id="specialToggle" onchange="checkAutoSend()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body">
+                <input type="text" id="specialText" class="input-special" placeholder="Special message or HTML">
+                <div class="preset-btns">
+                    <button class="btn btn-sm btn-preset" onclick="presetInningsBreak()">☕ Innings Break</button>
+                    <button class="btn btn-sm btn-preset" onclick="presetDrinkBreak()">🥤 Drinks</button>
+                    <button class="btn btn-sm btn-preset" onclick="presetResultCard()">🏆 Result</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hype -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🎉</span>Hype Animations</div>
+            </div>
+            <div class="card-body">
+                <div class="hype-btns">
+                    <button class="btn btn-hype btn-four" onclick="triggerHypeManual('FOUR')">
+                        <span class="hype-num">4</span><span class="hype-label">FOUR</span>
+                    </button>
+                    <button class="btn btn-hype btn-six" onclick="triggerHypeManual('SIX')">
+                        <span class="hype-num">6</span><span class="hype-label">SIX</span>
+                    </button>
+                    <button class="btn btn-hype btn-wicket" onclick="triggerHypeManual('WICKET')">
+                        <span class="hype-num">W</span><span class="hype-label">WICKET</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graphics Control -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🎬</span>Graphics Control</div>
+                <div class="card-controls">
+                    <button class="btn btn-sm btn-secondary" onclick="openAnimationSettings()">
+                        ⚙️ Animation Settings
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="auto-toggles-row">
+                    <div class="auto-toggle-item">
+                        <label class="switch small">
+                            <input type="checkbox" id="autoProfileToggle" checked onchange="checkAutoSend()">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-desc">Auto Profile (New Batter)</span>
+                    </div>
+
+                    <div class="auto-toggle-item">
+                        <label class="switch small">
+                            <input type="checkbox" id="autoResultToggle" checked onchange="checkAutoSend()">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-desc">Auto Result Card</span>
+                    </div>
+
+                    <div class="auto-toggle-item">
+                        <label class="switch small">
+                            <input type="checkbox" id="autoMilestoneToggle" checked onchange="checkAutoSend()">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-desc">Auto Milestone (50/100)</span>
+                    </div>
+
+                    <div class="auto-toggle-item">
+                        <label class="switch small">
+                            <input type="checkbox" id="autoAllOutToggle" checked onchange="checkAutoSend()">
+                            <span class="slider"></span>
+                        </label>
+                        <span class="toggle-desc">Auto All Out Card</span>
+                    </div>
+                </div>
+
+                <div class="graphics-grid">
+                    <button class="btn btn-graphic" onclick="openProfileControl()">
+                        <span class="graphic-icon">👤</span>
+                        <span class="graphic-label">Player Profile</span>
+                    </button>
+                    <button class="btn btn-graphic" onclick="showInningsSummary()">
+                        <span class="graphic-icon">📊</span>
+                        <span class="graphic-label">Innings Summary</span>
+                    </button>
+                    <button class="btn btn-graphic" onclick="showMatchSummary()">
+                        <span class="graphic-icon">🏆</span>
+                        <span class="graphic-label">Match Summary</span>
+                    </button>
+                    <button class="btn btn-graphic" onclick="hideAllGraphics()">
+                        <span class="graphic-icon">❌</span>
+                        <span class="graphic-label">Hide All</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Teams -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🏟️</span>Match Teams</div>
+                <div class="card-controls">
+                    <label class="lock-toggle">
+                        <input type="checkbox" id="lockTeams" onchange="toggleLock('teams')">
+                        <span class="lock-icon">🔓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body" id="teamsSection">
+                <div class="team-selectors">
+                    <div class="team-selector">
+                        <label>Team 1</label>
+                        <div class="team-dropdown" onclick="openTeamSelector(1)">
+                            <div class="team-preview">
+                                <div class="team-logo" id="team1Logo">?</div>
+                                <div class="team-info">
+                                    <span class="team-name" id="team1Name">Select Team</span>
+                                    <span class="team-players" id="team1Players">-- players</span>
+                                </div>
+                            </div>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                    </div>
+
+                    <div class="vs-badge">VS</div>
+
+                    <div class="team-selector">
+                        <label>Team 2</label>
+                        <div class="team-dropdown" onclick="openTeamSelector(2)">
+                            <div class="team-preview">
+                                <div class="team-logo" id="team2Logo">?</div>
+                                <div class="team-info">
+                                    <span class="team-name" id="team2Name">Select Team</span>
+                                    <span class="team-players" id="team2Players">-- players</span>
+                                </div>
+                            </div>
+                            <span class="dropdown-arrow">▼</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="batting-selector">
+                    <label>Who is Batting?</label>
+                    <div class="batting-options">
+                        <button class="batting-btn active" id="batBtn1" onclick="setBattingSide(1)">
+                            <span class="bat-team" id="batLabel1">T1</span>
+                            <span class="bat-status">🏏 Batting</span>
+                        </button>
+                        <button class="batting-btn" id="batBtn2" onclick="setBattingSide(2)">
+                            <span class="bat-team" id="batLabel2">T2</span>
+                            <span class="bat-status">⚾ Bowling</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="squad-preview" id="squadPreview">
+                    <div class="squad-header">
+                        <span>Batting Squad</span>
+                        <span class="squad-count" id="squadCount">0 players</span>
+                    </div>
+                    <div class="squad-tags" id="squadTags"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Match Score -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">📊</span>Match Score</div>
+                <div class="card-controls">
+                    <button class="btn btn-sm btn-danger" onclick="resetScore()">🔄 Reset</button>
+                    <label class="lock-toggle">
+                        <input type="checkbox" id="lockScore" onchange="toggleLock('score')">
+                        <span class="lock-icon">🔓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body" id="scoreSection">
+                <div class="score-inputs">
+                    <div class="score-input-group">
+                        <label>Runs</label>
+                        <input type="number" id="runs" value="0" class="input-big input-runs">
+                    </div>
+                    <div class="score-input-group">
+                        <label>Wickets</label>
+                        <input type="number" id="wkts" value="0" class="input-big input-wkts">
+                    </div>
+                    <div class="score-input-group">
+                        <label>Overs</label>
+                        <input type="number" id="overs" value="0.0" step="0.1" class="input-big input-overs">
+                    </div>
+                </div>
+
+                <div class="crr-display">
+                    <div class="crr-item">
+                        <span class="crr-label">CRR</span>
+                        <span class="crr-value" id="crrValue">0.00</span>
+                    </div>
+                    <div class="crr-divider"></div>
+                    <div class="crr-item">
+                        <span class="crr-label">Win Prob</span>
+                        <span class="crr-value" id="winProbValue">50%</span>
+                    </div>
+                </div>
+
+                <div class="lead-display" id="leadDisplay">
+                    <div class="lead-item">
+                        <span class="lead-label" id="leadLabel">Lead</span>
+                        <span class="lead-value" id="leadValue">0</span>
+                    </div>
+                </div>
+
+                <div class="status-input">
+                    <label>Status Text</label>
+                    <input type="text" id="statusText" value="LIVE MATCH">
+                </div>
+            </div>
+        </div>
+
+        <!-- Carousel -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🔄</span>Carousel Displays</div>
+                <div class="card-controls">
+                    <span class="toggle-label">Auto Loop</span>
+                    <label class="switch">
+                        <input type="checkbox" id="autoCarousel" checked onchange="checkAutoSend()">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="carousel-grid">
+                    <div class="carousel-item">
+                        <div class="carousel-header">
+                            <span>🎯 Target</span>
+                            <label class="switch small">
+                                <input type="checkbox" id="enTarget" checked onchange="checkAutoSend()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="carousel-inputs">
+                            <input type="number" id="target" value="0" placeholder="Target">
+                            <input type="number" id="totOvers" value="20" placeholder="Overs">
+                        </div>
+                        <button class="btn btn-sm btn-force" onclick="forceView('view-target')">👀 Show</button>
+                    </div>
+
+                    <div class="carousel-item">
+                        <div class="carousel-header">
+                            <span>🤝 Partnership</span>
+                            <label class="switch small">
+                                <input type="checkbox" id="enPart" checked onchange="checkAutoSend()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="carousel-inputs">
+                            <input type="number" id="partRuns" value="0" placeholder="Runs">
+                            <input type="number" id="partBalls" value="0" placeholder="Balls">
+                        </div>
+                        <div class="carousel-actions">
+                            <button class="btn btn-sm btn-force" onclick="forceView('view-partner')">👀 Show</button>
+                            <button class="btn btn-sm btn-secondary" onclick="resetPartnership()">Reset</button>
+                        </div>
+                    </div>
+
+                    <div class="carousel-item">
+                        <div class="carousel-header">
+                            <span>📈 Win Predictor</span>
+                            <label class="switch small">
+                                <input type="checkbox" id="enPred" checked onchange="checkAutoSend()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="carousel-info">Auto calculated based on match situation</div>
+                        <button class="btn btn-sm btn-force" onclick="forceView('view-predictor')">👀 Show</button>
+                    </div>
+
+                    <div class="carousel-item">
+                        <div class="carousel-header">
+                            <span>🏃 Chase Progress</span>
+                            <label class="switch small">
+                                <input type="checkbox" id="enChase" checked onchange="checkAutoSend()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="carousel-info">Shows when target is active</div>
+                        <button class="btn btn-sm btn-force" onclick="forceView('view-chase')">👀 Show</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Batsmen -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🏏</span>Current Batsmen</div>
+                <div class="card-controls">
+                    <button class="btn btn-sm btn-secondary" onclick="resetBatsmen()">🔄 Reset</button>
+                    <label class="lock-toggle">
+                        <input type="checkbox" id="lockBatsmen" onchange="toggleLock('batsmen')">
+                        <span class="lock-icon">🔓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body" id="batsmenSection">
+
+                <div class="striker-selector">
+                    <label>On Strike</label>
+                    <div class="striker-btns">
+                        <button class="striker-btn active" id="strikerBtn1" onclick="setStriker(1)">Batter 1</button>
+                        <button class="striker-btn" id="strikerBtn2" onclick="setStriker(2)">Batter 2</button>
+                    </div>
+                </div>
+
+                <div class="batter-card">
+                    <div class="batter-header">
+                        <span class="batter-label">Batter 1</span>
+                        <span class="striker-badge" id="striker1Badge">▶ ON STRIKE</span>
+                    </div>
+
+                    <div class="picker-input" onclick="openPlayerPicker('bat1')">
+                        <input type="text" id="b1Name" placeholder="Select batter..." readonly>
+                        <button type="button" class="picker-btn">▼</button>
+                    </div>
+
+                    <div class="batter-stats">
+                        <div class="stat-input">
+                            <label>R</label>
+                            <input type="number" id="b1Runs" value="0">
+                        </div>
+                        <div class="stat-input">
+                            <label>B</label>
+                            <input type="number" id="b1Balls" value="0">
+                        </div>
+                        <div class="stat-input">
+                            <label>4s</label>
+                            <input type="number" id="b1Fours" value="0">
+                        </div>
+                        <div class="stat-input">
+                            <label>6s</label>
+                            <input type="number" id="b1Sixes" value="0">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-sm btn-milestone" onclick="showMilestone(1)">⭐ Show Milestone</button>
+                </div>
+
+                <div class="batter-card">
+                    <div class="batter-header">
+                        <span class="batter-label">Batter 2</span>
+                        <span class="striker-badge hidden" id="striker2Badge">▶ ON STRIKE</span>
+                    </div>
+
+                    <div class="picker-input" onclick="openPlayerPicker('bat2')">
+                        <input type="text" id="b2Name" placeholder="Select batter..." readonly>
+                        <button type="button" class="picker-btn">▼</button>
+                    </div>
+
+                    <div class="batter-stats">
+                        <div class="stat-input">
+                            <label>R</label>
+                            <input type="number" id="b2Runs" value="0">
+                        </div>
+                        <div class="stat-input">
+                            <label>B</label>
+                            <input type="number" id="b2Balls" value="0">
+                        </div>
+                        <div class="stat-input">
+                            <label>4s</label>
+                            <input type="number" id="b2Fours" value="0">
+                        </div>
+                        <div class="stat-input">
+                            <label>6s</label>
+                            <input type="number" id="b2Sixes" value="0">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-sm btn-milestone" onclick="showMilestone(2)">⭐ Show Milestone</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bowler -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">⚾</span>Current Bowler</div>
+                <div class="card-controls">
+                    <button class="btn btn-sm btn-secondary" onclick="resetBowler()">🔄 Reset</button>
+                    <label class="lock-toggle">
+                        <input type="checkbox" id="lockBowler" onchange="toggleLock('bowler')">
+                        <span class="lock-icon">🔓</span>
+                    </label>
+                </div>
+            </div>
+            <div class="card-body" id="bowlerSection">
+                <div class="bowler-inputs">
+                    <div>
+                        <label>Bowler Name</label>
+                        <div class="picker-input" onclick="openPlayerPicker('bowler')">
+                            <input type="text" id="bowlName" placeholder="Select bowler..." readonly>
+                            <button type="button" class="picker-btn">▼</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label>Figures (W-R O.B)</label>
+                        <input type="text" id="bowlFigs" value="0-0 0.0">
+                    </div>
+                </div>
+
+                <div class="free-hit-toggle">
+                    <label class="switch">
+                        <input type="checkbox" id="freeHitToggle" onchange="checkAutoSend()">
+                        <span class="slider"></span>
+                    </label>
+                    <span class="free-hit-label">🔥 FREE HIT</span>
+                    <span class="free-hit-hint">(Auto: ON with NB, OFF after legal ball)</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Over Tracker -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">🎯</span>This Over</div>
+                <div class="card-controls">
+                    <span class="free-hit-badge" id="freeHitBadge">🔥 FREE HIT</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="over-display" id="overDisplay">
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                </div>
+
+                <div class="custom-ball-input">
+                    <input type="text" id="customBall" placeholder="Custom (e.g. Wd2, Nb4, 5)">
+                    <button class="btn btn-primary" onclick="addCustomBall()">Add</button>
+                </div>
+
+                <div class="ball-btns">
+                    <button class="btn btn-ball btn-dot" onclick="addBall('0')">•</button>
+                    <button class="btn btn-ball" onclick="addBall('1')">1</button>
+                    <button class="btn btn-ball" onclick="addBall('2')">2</button>
+                    <button class="btn btn-ball" onclick="addBall('3')">3</button>
+                    <button class="btn btn-ball btn-four" onclick="addBall('4')">4</button>
+                    <button class="btn btn-ball btn-six" onclick="addBall('6')">6</button>
+                </div>
+
+                <div class="ball-btns ball-btns-second">
+                    <button class="btn btn-ball btn-wicket" onclick="openWicketPopup()">WICKET</button>
+                    <button class="btn btn-ball btn-extra" onclick="addBall('Wd')">Wd</button>
+                    <button class="btn btn-ball btn-extra" onclick="addBall('Nb')">Nb</button>
+                </div>
+
+                <div class="over-actions">
+                    <button class="btn btn-action btn-undo" onclick="undoBall()">
+                        <span class="action-icon">↩</span>
+                        <span class="action-label">Undo</span>
+                    </button>
+                    <button class="btn btn-action btn-clear" onclick="clearOver()">
+                        <span class="action-icon">🗑</span>
+                        <span class="action-label">Clear</span>
+                    </button>
+                    <button class="btn btn-action btn-end" onclick="openBowlerPopup()">
+                        <span class="action-icon">🏁</span>
+                        <span class="action-label">End Over</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card glass-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">⚡</span>Quick Actions</div>
+            </div>
+            <div class="card-body">
+                <div class="quick-actions-grid">
+                    <button class="btn btn-quick" onclick="presetStartMatch()">
+                        <span class="quick-icon">🎬</span>
+                        <span class="quick-label">Start Match</span>
+                    </button>
+                    <button class="btn btn-quick" onclick="presetChaseStart()">
+                        <span class="quick-icon">🏁</span>
+                        <span class="quick-label">Chase Start</span>
+                    </button>
+                    <button class="btn btn-quick" onclick="swapStriker()">
+                        <span class="quick-icon">🔄</span>
+                        <span class="quick-label">Swap Striker</span>
+                    </button>
+                    <button class="btn btn-quick btn-danger" onclick="clearAllData()">
+                        <span class="quick-icon">🧹</span>
+                        <span class="quick-label">Clear All</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Management -->
+        <div class="card glass-card danger-card">
+            <div class="card-header">
+                <div class="card-title"><span class="card-icon">💾</span>Data Management</div>
+            </div>
+            <div class="card-body">
+                <div class="storage-info">
+                    <div class="storage-item">
+                        <span class="storage-label">Saved Data</span>
+                        <span class="storage-value" id="storageSize">0 KB</span>
+                    </div>
+                    <div class="storage-item">
+                        <span class="storage-label">Last Save</span>
+                        <span class="storage-value" id="lastSaveTime">--</span>
+                    </div>
+                </div>
+                <div class="data-actions">
+                    <button class="btn btn-secondary" onclick="exportData()">📤 Export</button>
+                    <button class="btn btn-secondary" onclick="importData()">📥 Import</button>
+                    <button class="btn btn-danger" onclick="clearSavedData()">🧹 Clear All Data</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="admin.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Score Updater V27</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="scorer.css">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+
+<body>
+
+    <!-- LOGIN -->
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <div class="login-icon">🏏</div>
+            <h1>Score Updater</h1>
+            <p>Fast mobile scoring for live matches</p>
+
+            <div class="login-form">
+                <div class="input-group">
+                    <label>Match ID</label>
+                    <input type="text" id="inputMatchId" placeholder="e.g. my_match_999" autocomplete="off">
+                </div>
+
+                <div class="input-group">
+                    <label>Scorer Name</label>
+                    <input type="text" id="inputScorerName" placeholder="e.g. Kamal">
+                </div>
+
+                <button class="btn btn-primary btn-lg" id="btnJoin" onclick="joinMatch()">
+                    🚀 Join Match
+                </button>
+            </div>
+
+            <div class="login-db-status" id="loginDbStatus">
+                <span class="db-dot connecting" id="loginDbDot"></span>
+                <span id="loginDbText">Connecting to database...</span>
+            </div>
+
+            <div class="recent-matches" id="recentMatches">
+                <p class="recent-title">Recent Matches</p>
+                <div class="recent-list" id="recentList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="scorer-screen" id="scorerScreen">
+
+        <!-- MODERN CONNECTION PANEL -->
+        <div class="conn-panel modern-glass" id="connPanel">
+            <!-- Top Quick Status Bar -->
+            <div class="conn-quick-bar" onclick="toggleConnPanel()" style="cursor: pointer;">
+                <div class="quick-status-group">
+                    <span class="modern-dot connecting" id="realtimeDot"></span>
+                    <span class="modern-dot connecting" id="dbDot"></span>
+                    <span class="modern-dot offline" id="adminDot"></span>
+                    <span class="modern-dot offline" id="scorebarDot"></span>
+                </div>
+                <div class="quick-ping-group">
+                    <div class="ping-pill">
+                        <span class="ping-icon">📡</span>
+                        <span id="realtimePingMsText">-- ms</span>
+                    </div>
+                    <div class="ping-pill">
+                        <span class="ping-icon">📺</span>
+                        <span id="scorebarPingMsText">-- ms</span>
+                    </div>
+                </div>
+                <div class="expand-icon" id="connExpandIcon">▼</div>
+            </div>
+
+            <!-- Expanded Dashboard (Hidden by default) -->
+            <div class="conn-dashboard" id="connDetails">
+                <div class="dashboard-grid">
+
+                    <!-- Battery Widget -->
+                    <div class="dash-widget">
+                        <div class="widget-header">
+                            <span class="widget-title">Power</span>
+                            <span class="widget-value" id="deviceBatteryText">--%</span>
+                        </div>
+                        <div class="modern-battery">
+                            <div class="battery-body">
+                                <div class="battery-fill" id="visualBatteryFill" style="width: 0%;"></div>
+                            </div>
+                            <div class="battery-tip"></div>
+                        </div>
+                    </div>
+
+                    <!-- Network Widget -->
+                    <div class="dash-widget">
+                        <div class="widget-header">
+                            <span class="widget-title">Network</span>
+                            <span class="widget-value" id="deviceNetworkText">--</span>
+                        </div>
+                        <div class="network-bars">
+                            <span id="deviceSignalText" style="font-size: 0.8rem; color: #a1a1aa;">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Ping Progress Widgets -->
+                    <div class="dash-widget full-width neon-glow">
+                        <div class="widget-header">
+                            <span class="widget-title">Realtime Ping</span>
+                        </div>
+                        <div class="modern-progress-bg">
+                            <div class="modern-progress-fill" id="realtimePingFill"></div>
+                        </div>
+
+                        <div class="widget-header" style="margin-top: 15px;">
+                            <span class="widget-title">ScoreBar Ping</span>
+                        </div>
+                        <div class="modern-progress-bg">
+                            <div class="modern-progress-fill" id="scorebarPingFill"></div>
+                        </div>
+                    </div>
+
+                    <!-- Push Mode Widget -->
+                    <div class="dash-widget full-width flex-row">
+                        <div class="widget-info">
+                            <span class="widget-title">Auto Push Mode</span>
+                            <span class="widget-sub" id="deviceRealtimeLabel">AUTO</span>
+                        </div>
+                        <label class="modern-switch">
+                            <input type="checkbox" id="realtimeToggle" onchange="toggleRealtimeMode()">
+                            <span class="modern-slider"></span>
+                        </label>
+                    </div>
+
+                </div>
+
+                <div class="dash-footer-info">
+                    <span>Match ID: <b id="connMatchId" style="color:var(--text-primary)">--</b></span>
+                    <span>Admin Sync: <b id="lastAdminSync">--</b></span>
+                    <span>Teams: <b id="teamsLoadedCount">0</b> | Players: <b id="playersLoadedCount">0</b></span>
+                </div>
+
+                <div class="conn-actions" style="margin-top: 15px;">
+                    <button class="btn btn-sm btn-secondary" onclick="reconnectAll()"
+                        style="background: rgba(255,255,255,0.05);">🔄 Reconnect</button>
+                    <button class="btn btn-sm btn-secondary" onclick="syncFromAdmin()"
+                        style="background: rgba(255,255,255,0.05);">📥 Sync</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- HEADER -->
+        <header class="scorer-header">
+            <div class="header-left">
+                <button class="btn-icon" onclick="showDisconnectConfirm()">←</button>
+                <div class="match-meta">
+                    <div class="match-id" id="displayMatchId">--</div>
+                    <div class="scorer-name" id="displayScorerName">Scorer</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn-icon sync-btn" id="syncBtn" onclick="syncFromAdmin()">🔄</button>
+                <!-- Changed onclick to new custom popup -->
+                <button class="btn-icon reset-btn" onclick="openResetPopup()">⟲</button>
+            </div>
+        </header>
+
+        <!-- NEW: RESET CONFIRMATION POPUP (GLASSMORPHISM) -->
+        <div class="popup-overlay" id="resetConfirmPopup">
+            <div class="device-alert-card alert-critical" style="text-align: center; display: block; padding: 30px;">
+
+                <!-- Animated Warning Icon -->
+                <div class="warning-icon-animate">⚠️</div>
+
+                <h3 style="color: #fff; font-size: 1.5rem; font-weight: 900; margin: 0 0 10px;">Reset Match?</h3>
+                <p style="color: rgba(255,255,255,0.8); font-size: 0.95rem; margin: 0 0 25px;">Are you sure you want to
+                    reset all score data for EVERYONE? This cannot be undone.</p>
+
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button class="device-alert-btn soft" onclick="closeResetPopup()">Cancel</button>
+                    <button class="device-alert-btn strong" onclick="executeResetMatch()">Yes, Reset Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- HEADER -->
+        <header class="scorer-header">
+            <div class="header-left">
+                <button class="btn-icon" onclick="showDisconnectConfirm()">←</button>
+                <div class="match-meta">
+                    <div class="match-id" id="displayMatchId">--</div>
+                    <div class="scorer-name" id="displayScorerName">Scorer</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn-icon sync-btn" id="syncBtn" onclick="syncFromAdmin()">🔄</button>
+
+                <button class="btn-icon reset-btn" onclick="resetScorerMatch()">⟲</button>
+            </div>
+        </header>
+
+        <!-- 1ST INNINGS PREVIEW (CHASE MODE) -->
+        <div class="prev-innings-box" id="prevInningsBox">
+            <span class="prev-innings-team" id="prevInningsTeam">TEAM 1</span>
+            <span class="prev-innings-score" id="prevInningsScore">0/0 <span>(0.0)</span></span>
+        </div>
+
+        <!-- SCORE DISPLAY -->
+        <div class="score-display">
+            <div class="team-badge" id="battingTeamBadge">BAT</div>
+
+            <div class="main-score">
+                <span class="score-runs" id="displayRuns">0</span>
+                <span class="score-sep">/</span>
+                <span class="score-wkts" id="displayWkts">0</span>
+            </div>
+
+            <div class="overs-line">
+                <span id="displayOvers">0.0</span> Overs
+            </div>
+
+            <div class="score-sub-row">
+                <span>CRR <b id="displayCrr">0.00</b></span>
+                <span id="targetDisplay" style="color: var(--accent); font-weight: 800;"></span>
+            </div>
+        </div>
+
+        <!-- FREE HIT -->
+        <div class="free-hit-banner" id="freeHitBanner">🔥 FREE HIT</div>
+
+        <!-- SMART INFO STRIP -->
+        <div class="mini-info-strip">
+            <div class="mini-box">
+                <span class="mini-label">Partnership</span>
+                <span class="mini-value" id="partnershipValue">0 (0)</span>
+            </div>
+            <div class="mini-box">
+                <span class="mini-label">Last Ball</span>
+                <span class="mini-value" id="lastBallValue">--</span>
+            </div>
+            <div class="mini-box">
+                <span class="mini-label">Target</span>
+                <span class="mini-value" id="targetValueMini">--</span>
+            </div>
+        </div>
+
+        <!-- LOCK BAR -->
+        <div class="lock-bar">
+            <button class="lock-chip" id="lockScoreBtn" onclick="toggleLockState('score')">🔓 Score</button>
+            <button class="lock-chip" id="lockBatsmenBtn" onclick="toggleLockState('batsmen')">🔓 Batsmen</button>
+            <button class="lock-chip" id="lockBowlerBtn" onclick="toggleLockState('bowler')">🔓 Bowler</button>
+            <button class="lock-chip danger" id="lockFullBtn" onclick="toggleLockState('full')">🔓 Safe Mode</button>
+        </div>
+
+        <!-- TABS -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="scoring" onclick="switchTab('scoring')">⚾ Scoring</button>
+            <button class="tab-btn" data-tab="batsmen" onclick="switchTab('batsmen')">🏏 Batsmen</button>
+            <button class="tab-btn" data-tab="bowler" onclick="switchTab('bowler')">🎯 Bowler</button>
+        </div>
+
+        <!-- TAB: SCORING -->
+        <div class="tab-content active" id="tab-scoring">
+
+            <!-- This Over Card -->
+            <div class="card" id="scoreSectionLite">
+                <div class="card-title-row">
+                    <span class="card-title">🎯 This Over</span>
+                    <span class="free-hit-chip" id="freeHitChip">🔥 FREE HIT</span>
+                </div>
+
+                <div class="over-balls" id="overBalls">
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                    <div class="ball-slot empty"></div>
+                </div>
+
+                <div class="custom-ball-row">
+                    <input type="text" id="customBallInput" class="custom-ball-input"
+                        placeholder="Custom (Wd2, Nb4, 5...)" autocomplete="off">
+                    <button class="btn btn-primary btn-custom-add" onclick="addCustomBall()">Add</button>
+                </div>
+            </div>
+
+            <!-- Run Buttons Card -->
+            <div class="card">
+                <div class="run-grid" id="actionsSectionLite">
+                    <button class="run-btn dot" onclick="addBall('0')">•</button>
+                    <button class="run-btn" onclick="addBall('1')">1</button>
+                    <button class="run-btn" onclick="addBall('2')">2</button>
+                    <button class="run-btn" onclick="addBall('3')">3</button>
+                    <button class="run-btn four" onclick="addBall('4')">4</button>
+                    <button class="run-btn six" onclick="addBall('6')">6</button>
+                </div>
+
+                <div class="extras-row">
+                    <button class="extra-btn wide-simple" onclick="addBall('Wd')">Wd</button>
+                    <button class="extra-btn wide-plus" onclick="openExtrasPopup('Wd')">Wd+</button>
+                    <button class="extra-btn nb-simple" onclick="addBall('Nb')">Nb</button>
+                    <button class="extra-btn nb-plus" onclick="openExtrasPopup('Nb')">Nb+</button>
+                    <button class="extra-btn wicket" onclick="openWicketPopup()">WICKET</button>
+                </div>
+
+                <div class="action-grid">
+                    <button class="action-btn undo" onclick="undoBall()">
+                        <span class="action-icon">↩</span>
+                        <span class="action-text">Undo</span>
+                    </button>
+                    <button class="action-btn clear" onclick="clearOver()">
+                        <span class="action-icon">🗑</span>
+                        <span class="action-text">Clear</span>
+                    </button>
+                    <button class="action-btn swap" onclick="swapStriker()">
+                        <span class="action-icon">🔄</span>
+                        <span class="action-text">Swap</span>
+                    </button>
+                    <button class="action-btn end" onclick="endOver()">
+                        <span class="action-icon">🏁</span>
+                        <span class="action-text">End Over</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: BATSMEN -->
+        <div class="tab-content" id="tab-batsmen">
+
+            <div class="striker-toggle">
+                <button class="striker-btn active" id="strikerBtn1" onclick="setStriker(1)">▶ Batter 1</button>
+                <button class="striker-btn" id="strikerBtn2" onclick="setStriker(2)">▶ Batter 2</button>
+            </div>
+
+            <div id="batsmenSectionLite">
+                <div class="player-card">
+                    <div class="player-card-header">
+                        <span class="player-card-title">Batter 1</span>
+                        <span class="strike-badge" id="strikeBadge1">ON STRIKE</span>
+                    </div>
+
+                    <div class="picker-row" onclick="openPlayerPicker(1)">
+                        <div class="picker-avatar" id="b1Avatar">?</div>
+                        <input type="text" id="b1Name" class="picker-input" placeholder="Select batter..." readonly>
+                        <span class="picker-arrow">▼</span>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box"><span class="stat-label">Runs</span><span class="stat-value"
+                                id="b1Runs">0</span></div>
+                        <div class="stat-box"><span class="stat-label">Balls</span><span class="stat-value"
+                                id="b1Balls">0</span></div>
+                        <div class="stat-box"><span class="stat-label">4s</span><span class="stat-value"
+                                id="b1Fours">0</span></div>
+                        <div class="stat-box"><span class="stat-label">6s</span><span class="stat-value"
+                                id="b1Sixes">0</span></div>
+                    </div>
+                    <div class="sr-line">Strike Rate: <b id="b1SR">0.00</b></div>
+                </div>
+
+                <div class="player-card">
+                    <div class="player-card-header">
+                        <span class="player-card-title">Batter 2</span>
+                        <span class="strike-badge hidden" id="strikeBadge2">ON STRIKE</span>
+                    </div>
+
+                    <div class="picker-row" onclick="openPlayerPicker(2)">
+                        <div class="picker-avatar" id="b2Avatar">?</div>
+                        <input type="text" id="b2Name" class="picker-input" placeholder="Select batter..." readonly>
+                        <span class="picker-arrow">▼</span>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box"><span class="stat-label">Runs</span><span class="stat-value"
+                                id="b2Runs">0</span></div>
+                        <div class="stat-box"><span class="stat-label">Balls</span><span class="stat-value"
+                                id="b2Balls">0</span></div>
+                        <div class="stat-box"><span class="stat-label">4s</span><span class="stat-value"
+                                id="b2Fours">0</span></div>
+                        <div class="stat-box"><span class="stat-label">6s</span><span class="stat-value"
+                                id="b2Sixes">0</span></div>
+                    </div>
+                    <div class="sr-line">Strike Rate: <b id="b2SR">0.00</b></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: BOWLER -->
+        <div class="tab-content" id="tab-bowler">
+
+            <div id="bowlerSectionLite">
+                <div class="player-card">
+                    <div class="player-card-header">
+                        <span class="player-card-title">Current Bowler</span>
+                        <button class="btn btn-sm btn-secondary" onclick="openBowlerPicker()">Change</button>
+                    </div>
+
+                    <div class="picker-row" onclick="openBowlerPicker()">
+                        <div class="picker-avatar" id="bowlAvatar">?</div>
+                        <input type="text" id="bowlName" class="picker-input" placeholder="Select bowler..." readonly>
+                        <span class="picker-arrow">▼</span>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box"><span class="stat-label">Overs</span><span class="stat-value"
+                                id="bowlOvers">0.0</span></div>
+                        <div class="stat-box"><span class="stat-label">Runs</span><span class="stat-value"
+                                id="bowlRuns">0</span></div>
+                        <div class="stat-box"><span class="stat-label">Wkts</span><span class="stat-value"
+                                id="bowlWickets">0</span></div>
+                        <div class="stat-box"><span class="stat-label">Econ</span><span class="stat-value"
+                                id="bowlEcon">0.00</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title-row">
+                        <span class="card-title">Previous Bowlers</span>
+                    </div>
+                    <div class="history-list" id="bowlerHistoryList">
+                        <div class="empty-text">No previous bowlers</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TECH PANEL -->
+        <div class="tech-panel">
+            <button class="tech-toggle" onclick="toggleTechPanel()">
+                🛠 Tech Preview <span id="techExpandIcon">▼</span>
+            </button>
+            <div class="tech-content" id="techContent">
+                <div class="tech-grid">
+                    <div class="tech-item"><span>Local Score</span><b id="techLocalScore">0/0 (0.0)</b></div>
+                    <div class="tech-item"><span>Admin Score</span><b id="techAdminScore">--</b></div>
+                    <div class="tech-item"><span>RT Channel</span><b id="techChannel">--</b></div>
+                    <div class="tech-item"><span>Messages Sent</span><b id="techMsgCount">0</b></div>
+                    <div class="tech-item"><span>Last Heartbeat</span><b id="techHeartbeat">--</b></div>
+                </div>
+                <div class="tech-preview-box">
+                    <pre id="techPreviewJson">{}</pre>
+                </div>
+                <div class="tech-actions">
+                    <button class="btn btn-sm btn-secondary" onclick="clearLocalOnly()">🧹 Clear Local State</button>
+                    <button class="btn btn-sm btn-secondary" onclick="forceSaveNow()">💾 Force Save</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- POPUPS -->
+
+    <div class="popup-overlay" id="extrasPopup">
+        <div class="popup-card">
+            <div class="popup-header">
+                <h3 id="extrasTitle">Wide</h3>
+                <button class="popup-close" onclick="closeExtrasPopup()">✕</button>
+            </div>
+            <div class="popup-body no-scroll">
+                <p>Additional runs with <span id="extrasType">Wide</span>:</p>
+                <div class="extras-grid">
+                    <button class="extras-btn" onclick="confirmExtras(0)">0</button>
+                    <button class="extras-btn" onclick="confirmExtras(1)">+1</button>
+                    <button class="extras-btn" onclick="confirmExtras(2)">+2</button>
+                    <button class="extras-btn" onclick="confirmExtras(3)">+3</button>
+                    <button class="extras-btn" onclick="confirmExtras(4)">+4</button>
+                    <button class="extras-btn" onclick="confirmExtras(5)">+5</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CHASE START POPUP -->
+    <div class="popup-overlay" id="chaseStartPopup">
+        <div class="popup-card text-center" style="text-align: center;">
+            <div class="popup-header" style="justify-content: center;">
+                <h3 style="font-size: 1.6rem; color: var(--accent);">🎯 CHASE STARTED</h3>
+            </div>
+            <div class="popup-body no-scroll" style="padding: 30px 20px;">
+                <p style="color: var(--text-secondary); margin-bottom: 5px; font-weight: 700;">TARGET TO WIN</p>
+                <h1 id="chasePopupTarget"
+                    style="font-size: 5.5rem; margin: 0; line-height: 1; color: var(--text-primary);">--</h1>
+                <p id="chasePopupBatTeam"
+                    style="font-size: 1.2rem; font-weight: 800; margin-top: 15px; color: var(--success); text-transform: uppercase;">
+                    -- IS BATTING</p>
+            </div>
+            <div class="popup-footer" style="justify-content: center;">
+                <button class="btn btn-primary btn-lg" onclick="closeChaseStartPopup()">🚀 Start Scoring</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="wicketPopup">
+        <div class="popup-card">
+            <div class="popup-header">
+                <h3>🏏 WICKET</h3>
+                <button class="popup-close" onclick="closeWicketPopup()">✕</button>
+            </div>
+            <div class="popup-body no-scroll">
+                <div class="wicket-grid">
+                    <button class="wicket-btn"
+                        onclick="confirmWicket('Bowled')"><span>🎯</span><span>Bowled</span></button>
+                    <button class="wicket-btn"
+                        onclick="confirmWicket('Caught')"><span>🧤</span><span>Caught</span></button>
+                    <button class="wicket-btn" onclick="confirmWicket('LBW')"><span>🦵</span><span>LBW</span></button>
+                    <button class="wicket-btn" onclick="confirmWicket('Run Out')"><span>🏃</span><span>Run
+                            Out</span></button>
+                    <button class="wicket-btn"
+                        onclick="confirmWicket('Stumped')"><span>🪵</span><span>Stumped</span></button>
+                    <button class="wicket-btn" onclick="confirmWicket('Hit Wicket')"><span>💥</span><span>Hit
+                            Wicket</span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PLAYER PICKER (BATSMAN) -->
+    <div class="popup-overlay" id="playerPickerPopup">
+        <div class="popup-card popup-lg">
+            <div class="popup-header">
+                <h3 id="playerPickerTitle">Select Batter</h3>
+                <button class="popup-close" onclick="closePlayerPicker()">✕</button>
+            </div>
+            <div class="popup-body picker-body">
+                <input type="text" id="playerSearchInput" class="search-input" placeholder="Search player..."
+                    oninput="filterPlayerList()">
+                <div class="single-scroll-list" id="playerPickerList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOWLER PICKER -->
+    <div class="popup-overlay" id="bowlerPickerPopup">
+        <div class="popup-card popup-lg">
+            <div class="popup-header">
+                <h3>Select Bowler</h3>
+                <button class="popup-close" onclick="closeBowlerPicker()">✕</button>
+            </div>
+            <div class="popup-body picker-body">
+                <input type="text" id="bowlerPickerSearchInput" class="search-input" placeholder="Search bowler..."
+                    oninput="filterBowlerPickerList()">
+                <div class="single-scroll-list" id="bowlerPickerList"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEXT BOWLER (END OVER) -->
+    <div class="popup-overlay" id="nextBowlerPopup">
+        <div class="popup-card popup-lg">
+            <div class="popup-header">
+                <h3>🎯 Select Next Bowler</h3>
+                <button class="popup-close" onclick="closeNextBowlerPopup()">✕</button>
+            </div>
+            <div class="popup-body picker-body">
+                <input type="text" id="bowlerSearchInput" class="search-input" placeholder="Search bowler..."
+                    oninput="filterNextBowlerList()">
+                <div class="single-scroll-list" id="nextBowlerList"></div>
+            </div>
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeNextBowlerPopup()">Cancel</button>
+                <button class="btn btn-primary" onclick="confirmNextBowler()">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW BATTER (AFTER WICKET) -->
+    <div class="popup-overlay" id="newBatterPopup">
+        <div class="popup-card popup-lg">
+            <div class="popup-header">
+                <h3>🏏 New Batter</h3>
+                <button class="popup-close" onclick="closeNewBatterPopup()">✕</button>
+            </div>
+            <div class="popup-body picker-body">
+                <input type="text" id="newBatterSearchInput" class="search-input" placeholder="Search player..."
+                    oninput="filterNewBatterList()">
+                <div class="single-scroll-list" id="newBatterList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="popup-overlay" id="disconnectPopup">
+        <div class="popup-card">
+            <div class="popup-header">
+                <h3>⚠️ Leave Match?</h3>
+                <button class="popup-close" onclick="closeDisconnectPopup()">✕</button>
+            </div>
+            <div class="popup-body no-scroll">
+                <p>Are you sure you want to disconnect?</p>
+                <p class="warning-text">Local state will stay saved.</p>
+            </div>
+            <div class="popup-footer">
+                <button class="btn btn-secondary" onclick="closeDisconnectPopup()">Cancel</button>
+                <button class="btn btn-danger" onclick="disconnectMatch()">Leave</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast">
+        <span class="toast-icon" id="toastIcon">✅</span>
+        <span class="toast-text" id="toastText">Success</span>
+    </div>
+
+    <div class="device-alert-overlay" id="deviceAlertOverlay">
+        <div class="device-alert-card alert-low" id="deviceAlertCard">
+            <div class="device-alert-bell-wrap">
+                <div class="device-alert-bell-ring ring-1"></div>
+                <div class="device-alert-bell-ring ring-2"></div>
+                <div class="device-alert-bell">🔔</div>
+            </div>
+
+            <div class="device-alert-content">
+                <h3 id="deviceAlertTitle">Reminder</h3>
+                <p id="deviceAlertMessage">Battery or network warning</p>
+                <div class="device-alert-meta" id="deviceAlertMeta">--</div>
+
+                <div class="device-alert-actions">
+                    <button class="device-alert-btn soft" onclick="openDeviceAlertPanel()">Open</button>
+                    <button class="device-alert-btn strong" onclick="closeDeviceAlert()">Got it</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="manualPushFab" class="manual-push-fab" onclick="manualPushNow()">
+        <span class="manual-push-fab-dot"></span>
+        <span id="manualPushFabText">Manual Push</span>
+    </button>
+
+    <script src="scorer.js"></script>
+</body>
+
+</html>
